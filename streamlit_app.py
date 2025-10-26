@@ -4,35 +4,35 @@ import json
 import pandas as pd
 from datetime import date
 
+# ------------------ Streamlit Page ------------------
 st.set_page_config(page_title="Daily Salary Entry", page_icon="💰", layout="wide")
-
 st.title("💰 Daily Salary Entry App (Google Sheet)")
 
-# ---------- GOOGLE SHEET AUTH ----------
-USE_LOCAL_FILE = False  # change to True if using service_account.json locally
-
-if USE_LOCAL_FILE:
-    gc = gspread.service_account(filename="service_account.json")
-    SHEET_ID = "PASTE_YOUR_SHEET_ID_HERE"
-else:
+# ------------------ Google Sheet Auth ------------------
+try:
+    # Load service account from Streamlit secrets
     sa_json_str = st.secrets["gcp_service_account"]["json"]
     sa_info = json.loads(sa_json_str)
     gc = gspread.service_account_from_dict(sa_info)
-    SHEET_ID = st.secrets["gcp_service_account"]["sheet_id"]
 
-# ---------- OPEN SHEET ----------
-try:
+    # Get sheet by ID
+    SHEET_ID = st.secrets["gcp_service_account"]["sheet_id"]
     sh = gc.open_by_key(SHEET_ID)
     ws = sh.sheet1
+
 except Exception as e:
-    st.error(f"❌ Could not open Google Sheet: {e}")
+    st.error(f"❌ Could not connect to Google Sheet: {e}")
     st.stop()
 
-# ---------- FORM ----------
+# ------------------ Create Headers if Empty ------------------
+if ws.get_all_values() == []:
+    headers = ["Date", "Name", "Salary", "Notes"]
+    ws.append_row(headers)
+
+# ------------------ Data Entry Form ------------------
 st.subheader("📝 Add a new entry")
 
 with st.form("entry_form", clear_on_submit=True):
-    entry_date = st.date_input("Date", value=date.today())
     name = st.text_input("Worker Name")
     salary = st.number_input("Salary (₹)", min_value=0.0, format="%.2f")
     notes = st.text_area("Notes (optional)")
@@ -42,14 +42,15 @@ if submitted:
     if name.strip() == "":
         st.warning("⚠️ Please enter a worker name.")
     else:
-        row = [entry_date.isoformat(), name, salary, notes]
+        today = date.today().isoformat()
+        row = [today, name, salary, notes]
         try:
             ws.append_row(row, value_input_option="USER_ENTERED")
             st.success(f"✅ Entry for {name} saved successfully!")
         except Exception as e:
             st.error(f"❌ Could not save data: {e}")
 
-# ---------- SHOW DATA ----------
+# ------------------ Display Current Records ------------------
 st.subheader("📋 Current Records")
 
 try:
